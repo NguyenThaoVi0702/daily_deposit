@@ -14,9 +14,9 @@ def fetch_data_from_trino(query: str) -> pd.DataFrame:
     
     try:
         engine = create_engine(
-            "trino://10.43.128.104:18080/datalake",
+            "trino://****/datalake",
             connect_args={
-                "auth": BasicAuthentication("ai_user","Ab123456"),
+                "auth": BasicAuthentication("ai_user","****"),
                 "http_scheme": "https",
                 "verify": False
             }
