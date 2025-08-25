@@ -1,0 +1,305 @@
+raw_loan_data:
+   type: kedro_datasets.pandas.CSVDataset
+   filepath: data/01_raw/daily_loan_data_raw.csv
+
+#params:trino_connection_details:
+#  type: kedro.config.ConfigLoader
+#  config_patterns: ["credentials.yml"]
+#  key: trino_connection_details
+
+
+#raw_loan_data:
+#  type: kedro_datasets.pandas.sqlquerydataset
+#  sql: "SELECT DISTINCT * FROM datalake.vcrm.frpt_loan_brnch_bal_prog WHERE cob_dt >= '2023-01-01' ORDER BY cob_dt ASC"
+#  credentials: trino_datalake
+
+
+preprocessed_loan_data:
+  type: kedro_datasets.pandas.CSVDataset
+  filepath: data/02_intermediate/daily_diff.csv
+  save_args:
+    index: False
+
+model_1_feature_data:
+  type: kedro_datasets.pandas.ParquetDataset
+  filepath: data/03_primary/model_1_features.parquet
+
+
+raw_hourly_loan_data:
+  type: kedro_datasets.pandas.CSVDataset
+  filepath: data/01_raw/df_hourly_m2_sample_20250630.csv
+
+# raw_hourly_loan_data:
+#   type: kedro_datasets.pandas.SQLQueryDataSet
+#   credentials: trino_datalake
+#   sql: file://conf/base/sql/get_hourly_data.sql
+#   engine_args:
+#     connect_args:
+#       http_scheme: https
+#       verify: False
+
+model_2_feature_data:
+  type: kedro_datasets.pandas.ParquetDataset
+  filepath: data/03_primary/model_2_features.parquet
+
+
+# --- Model 1 Training Outputs ---
+
+
+model_1_feature_list:
+  type: kedro_datasets.text.TextDataset
+  filepath: data/07_model_output/model_1_feature_list.txt
+
+
+model_1_q0.1:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/model_1_q0.1.pkl
+
+model_1_q0.5:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/model_1_q0.5.pkl
+
+model_1_q0.9:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/model_1_q0.9.pkl
+
+model_1_mean:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/model_1_mean.pkl
+
+
+model_1_oos_predictions:
+  type: kedro_datasets.pandas.CSVDataset
+  filepath: data/07_model_output/model_1_oos_predictions.csv
+  save_args:
+    index: False
+
+
+# --- Model 2 Training Outputs ---
+
+
+model_2_mean_corrector:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/model_2_mean_corrector.pkl
+
+model_2_median_corrector:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/model_2_median_corrector.pkl
+
+
+model_2_feature_list_mean:
+  type: kedro_datasets.text.TextDataset
+  filepath: data/07_model_output/model_2_feature_list_mean.txt
+
+model_2_feature_list_median:
+  type: kedro_datasets.text.TextDataset
+  filepath: data/07_model_output/model_2_feature_list_median.txt
+
+
+# --- Reporting ---
+
+
+evaluation_results_table:
+  type: kedro.io.MemoryDataset
+
+point_forecast_metrics:
+  type: kedro_datasets.json.JSONDataset
+  filepath: data/08_reporting/point_forecast_metrics.json
+
+interval_metrics:
+  type: kedro_datasets.json.JSONDataset
+  filepath: data/08_reporting/interval_metrics.json
+
+quantile_loss_metrics:
+  type: kedro_datasets.json.JSONDataset
+  filepath: data/08_reporting/quantile_loss_metrics.json
+
+directional_accuracy_metrics:
+  type: kedro_datasets.json.JSONDataset
+  filepath: data/08_reporting/directional_accuracy_metrics.json
+
+activity_based_metrics:
+  type: kedro_datasets.json.JSONDataset
+  filepath: data/08_reporting/activity_based_metrics.json
+  
+
+
+feature_importance_m1_q01_fig:
+  type: kedro.io.MemoryDataset
+feature_importance_m1_q05_fig:
+  type: kedro.io.MemoryDataset
+feature_importance_m1_q09_fig:
+  type: kedro.io.MemoryDataset
+feature_importance_m1_mean_fig:
+  type: kedro.io.MemoryDataset
+feature_importance_m2_median_fig:
+  type: kedro.io.MemoryDataset
+feature_importance_m2_mean_fig:
+  type: kedro.io.MemoryDataset
+
+forecast_comparison_plot_median:
+  type: kedro.io.MemoryDataset
+forecast_comparison_plot_mean:
+  type: kedro.io.MemoryDataset
+m2_quality_scatter_plot:
+  type: kedro.io.MemoryDataset
+
+# PNG files saved to disk
+feature_importance_m1_q01_png:
+  type: kedro_datasets.matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/feature_importance_m1_q0.1.png
+feature_importance_m1_q05_png:
+  type: kedro_datasets.matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/feature_importance_m1_q0.5.png
+feature_importance_m1_q09_png:
+  type: kedro_datasets.matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/feature_importance_m1_q0.9.png
+feature_importance_m1_mean_png:
+  type: kedro_datasets.matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/feature_importance_m1_mean.png
+feature_importance_m2_median_png:
+  type: kedro_datasets.matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/feature_importance_m2_median.png
+feature_importance_m2_mean_png:
+  type: kedro_datasets.matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/feature_importance_m2_mean.png
+
+
+# --- Primary Split Datasets (In-Memory) ---
+model_1_features_dev:
+  type: kedro.io.MemoryDataset
+
+model_1_features_test:
+  type: kedro.io.MemoryDataset
+
+model_2_features_dev:
+  type: kedro.io.MemoryDataset
+
+model_2_features_test:
+  type: kedro.io.MemoryDataset
+
+
+# --- Prediction Pipeline Artifacts ---
+
+
+model_1_prod_q0.1:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/prod/model_1_prod_q0.1.pkl
+model_1_prod_q0.5:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/prod/model_1_prod_q0.5.pkl
+model_1_prod_q0.9:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/prod/model_1_prod_q0.9.pkl
+model_1_prod_mean:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/prod/model_1_prod_mean.pkl
+
+model_2_prod_mean_corrector:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/prod/model_2_prod_mean_corrector.pkl
+model_2_prod_median_corrector:
+  type: kedro_datasets.pickle.PickleDataset
+  filepath: data/06_models/prod/model_2_prod_median_corrector.pkl
+
+# --- Outputs of the 9am Prediction Run ---
+prediction_today:
+  type: kedro_datasets.json.JSONDataset
+  filepath: data/09_predictions/prediction_today.json
+
+prediction_yearly_trend_mean_based:
+  type: kedro_datasets.pandas.CSVDataset
+  filepath: data/09_predictions/prediction_yearly_trend_mean_based.csv
+
+prediction_yearly_trend_median_based:
+  type: kedro_datasets.pandas.CSVDataset
+  filepath: data/09_predictions/prediction_yearly_trend_median_based.csv
+
+# --- Inputs and Outputs of the 3pm Prediction Run ---
+
+
+raw_hourly_data_today:
+  type: kedro_datasets.pandas.CSVDataset
+  filepath: data/01_raw/df_hourly_m2_sample_20250630.csv 
+
+# raw_hourly_data_today:
+#   type: kedro_datasets.pandas.SQLQueryDataSet
+#   credentials: trino_datalake
+#   sql: file://conf/base/sql/get_hourly_data.sql
+#   engine_args:
+#     connect_args:
+#       http_scheme: https
+#       verify: False
+
+prediction_corrected_today:
+  type: kedro_datasets.json.JSONDataset
+  filepath: data/09_predictions/prediction_corrected_today.json
+  
+
+
+# --- hdfs output ---
+predictions_for_datalake:
+  type: kedro_datasets.pandas.CSVDataset
+  filepath: data/10_datalake_output/daily_predictions.csv
+  save_args:
+    index: False
+    header: True 
+    
+    
+    
+daily_actuals_for_datalake:
+  type: kedro_datasets.pandas.CSVDataset
+  filepath: data/10_datalake_output/daily_actuals.csv
+  save_args:
+    index: False
+    header: True
+
+
+# --- history data ---
+
+preserved_last_days_mean_forecast:
+    type: kedro.io.MemoryDataset
+    
+preserved_last_days_median_forecast:
+    type: kedro.io.MemoryDataset
+
+last_days_mean_forecast:
+  type: kedro_datasets.pandas.CSVDataset
+  filepath: data/09_predictions/prediction_yearly_trend_mean_based.csv
+
+last_days_median_forecast:
+  type: kedro_datasets.pandas.CSVDataset
+  filepath: data/09_predictions/prediction_yearly_trend_median_based.csv
+    
+# Single-row CSV that will be staged for HDFS to load into the history table
+
+prediction_history_partitions:
+    type: kedro_datasets.partitions.PartitionedDataset
+    path: data/11_intermediate/prediction_history/
+    dataset: kedro_datasets.pandas.CSVDataset
+    
+    #    type: kedro_datasets.pandas.CSVDataset
+    #    save_args:
+    #        index: False
+    #        header: True
+    #filename_suffix: ".csv"
+
+prediction_history_for_datalake:
+  type: kedro_datasets.pandas.CSVDataset
+  filepath: data/10_datalake_output/prediction_history.csv
+  save_args:
+    index: False
+    header: True
+
+new_history_record_in_memory:
+    type: kedro_datasets.pandas.ParquetDataset
+    filepath: data/11_intermediate/temp/new_daily_history.parquet
+    
+final_combined_history_df:
+    type: kedro.io.MemoryDataset
+    
+newly_generated_history: 
+    type: kedro.io.MemoryDataset
+    
+history_update_complete_trigger:
+    type: kedro.io.MemoryDataset
