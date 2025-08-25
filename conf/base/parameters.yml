@@ -1,0 +1,148 @@
+data_ingestion:
+  daily_balance_query: |
+            select
+                brn,
+                (kbl_casa_amt + kbl_cd_amt + khdn_casa_amt + khdn_cd_amt + oth_casa_amt + oth_cd_amt) as total_bal, 	
+                cob_dt
+            from
+                (
+                select
+                    distinct brn,
+                    cast(kbl_casa_amt as double) as kbl_casa_amt,
+                    cast(kbl_cd_amt as double) as kbl_cd_amt,
+                    cast(khdn_casa_amt as double) as khdn_casa_amt,
+                    cast(khdn_cd_amt as double) as khdn_cd_amt,
+                    cast(oth_casa_amt as double) as oth_casa_amt,
+                    cast(oth_cd_amt as double) as oth_cd_amt,
+                    cob_dt
+                from
+                    vcrm.vcrm_frpt_depst_report_sum_prog 
+                )
+            where
+                cob_dt >= '2023-01-01'
+
+
+primary_split:
+  holdout_days: 70
+
+model_1_params:
+  date_column: "cob_dt"
+  balance_col: "total_bal"
+  target_col: "total_bal_diff"
+
+model_2_params:
+  date_column: "cob_dt"
+
+
+model_1_training:
+
+  prediction_targets: [0.1, 0.5, 0.9, "mean"]
+  target_col: "total_bal_diff"
+  balance_col: "total_bal"
+  
+  # Configuration for Optuna hyperparameter tuning
+  initial_train_ratio_for_optuna: 0.7
+  n_splits_cv_hyperopt: 2
+  optuna_n_trials: 5 # Reduced for faster testing
+  optuna_seed: 40
+  
+  # Configuration for OOS prediction
+  n_splits_cv_oos: 3
+
+
+model_2_training:
+  targets_to_correct: ["mean", "median"]
+  
+  actual_m1_target_col: "total_bal_diff"
+
+  # Configuration for Optuna 
+  train_ratio: 0.75
+  n_splits_cv_hyperopt: 3
+  optuna_n_trials: 3
+  optuna_seed: 40
+
+
+# --- Reporting ---
+
+reporting:
+  m2_correction_factors:
+    median: 0.8
+    mean: 0.9
+
+  m1_feature_lookback_days: 150
+
+
+prediction:
+  # How many days into the future to forecast in the 9am run
+  yearly_forecast_days: 365
+  
+  # Which M1 prediction to use as the "synthetic actual" for the next day's features
+  # in the recursive loop. 
+  synthetic_actual_choice_mean: "final_pred_mean"
+  synthetic_actual_choice_median: "final_pred_q0.5"
+  m2_correction_factors:
+    median: 0.8
+    mean: 0.9
+    
+  prediction_history_filepath: "data/10_datalake_output/prediction_history.csv"
+    
+    
+backfill:
+  days_to_backfill: 20
+
+
+backfill_simulation:
+  start_date: "2025-01-01"
+  prediction_window_days: 7
+
+    
+
+models:
+    loan:
+        sql_query: "SELECT DISTINCT * FROM datalake.vcrm.frpt_loan_brnch_bal_prog WHERE cob_dt >= '2023-01-01' ORDER BY cob_dt ASC"
+        raw_data_filename: "loan_raw_data.csv"
+        preprocessed_filename: "loan_daily_diff.csv"
+        feature_params: 
+            date_column: "cob_dt"
+            balance_col: "total_bal"
+            target_col: "total_bal_diff"
+            
+    deposit:
+        sql_query: |
+            select
+                cob_dt, 
+                    sum(total_bal) as total_bal
+            from
+                (
+                select
+                    (kbl_casa_amt + kbl_cd_amt + khdn_casa_amt + khdn_cd_amt + oth_casa_amt + oth_cd_amt) as total_bal, 	
+                    cob_dt
+                from
+                    (
+                    select
+                        distinct brn,
+                        cast(kbl_casa_amt as double) as kbl_casa_amt,
+                        cast(kbl_cd_amt as double) as kbl_cd_amt,
+                        cast(khdn_casa_amt as double) as khdn_casa_amt,
+                        cast(khdn_cd_amt as double) as khdn_cd_amt,
+                        cast(oth_casa_amt as double) as oth_casa_amt,
+                        cast(oth_cd_amt as double) as oth_cd_amt,
+                        cob_dt
+                    from
+                        vcrm.vcrm_frpt_depst_report_sum_prog 
+            )
+                where
+                    cob_dt >= '2023-01-01'
+            )
+            group by
+                cob_dt
+            order by
+                cob_dt asc               
+        raw_data_filename: "deposit_raw_data.csv"
+        preprocessed_filename: "deposit_daily_diff.csv"
+        feature_params: 
+            date_column: "cob_dt"
+            balance_col: "total_bal"
+            target_col: "total_bal_diff"
+            
+
