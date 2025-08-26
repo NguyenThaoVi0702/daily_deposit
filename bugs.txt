@@ -1,0 +1,351 @@
+import os
+from datetime import timedelta, datetime
+
+from airflow import DAG
+from vietinbank.spark.operators.spark_sql import SparkSqlOperator
+from airflow.operators.python_operator import PythonOperator
+from vietinbank.operators.db_operator import SparkSybaseOperator
+from vietinbank.operators.db_operator import  SparkDorisOperator
+from airflow.operators.bash import BashOperator
+from airflow.sensors.sql import SqlSensor
+from airflow.sensors.external_task import ExternalTaskSensor
+from utils import macro
+
+import pendulum
+from airflow.models import Variable
+from pyspark.sql import SparkSession
+
+email = Variable.get("de_mail")
+local_tz = pendulum.local_timezone()
+current_directory = os.path.dirname(os.path.realpath(__file__))
+
+default_args = {
+    'owner': 'datalake',
+    'start_date': datetime(2025, 1, 1, tzinfo=local_tz),
+    'concurrency': 2,
+    'max_active_runs': 2,
+    'retries': 3,
+    'retry_delay': timedelta(minutes=60),
+    'email': ['vint1@vietinbank.vn'],
+    'email_on_failure': True,
+    'email_on_retry': False,
+}
+
+def shift_Cob_Date(inputdate):
+        return (inputdate.in_timezone("Asia/Ho_Chi_Minh") - timedelta(days=1) ).strftime('%Y-%m-%d') 
+
+def shift_Cob_Date_last_day(inputdate):
+    last_day = inputdate.in_timezone("Asia/Ho_Chi_Minh") - timedelta(days=2)
+    return last_day.strftime('%Y-%m-%d')
+
+with DAG('vint1_daily_deposit_create_table',
+         default_args=default_args,
+         schedule_interval="50 13 * * *",
+         catchup=False,
+         tags=["etl"]
+         ) as dag:
+        
+
+        vint1_daily_deposit_create_table_task_staging = SparkSqlOperator (
+                task_id= 'vint1_daily_deposit_create_table_task_staging',
+                conn_id= 'spark_datalake',
+                name= 'vint1_daily_deposit_create_table_task_staging',
+                run_as_user='airflow',
+                executor_cores=2,
+                num_executors=5,
+                executor_memory="4g",
+                driver_memory="4g",
+                dag= dag,
+                sql="""    
+                --DROP TABLE IF EXISTS customer360.daily_deposit_predictions_staging;
+                CREATE TABLE  customer360.daily_deposit_predictions_staging
+                (
+                    cob_dt STRING,
+                    target_date STRING,
+                    scenario STRING,
+                    metric_type STRING,
+                    metric_value DOUBLE
+                )
+                stored as orc
+                        """)
+        
+
+        vint1_daily_deposit_create_table_task_metabase = SparkSqlOperator (
+                task_id= 'vint1_daily_deposit_create_table_task_metabase',
+                conn_id= 'spark_datalake',
+                name= 'vint1_daily_deposit_create_table_task_metabase',
+                run_as_user='airflow',
+                executor_cores=2,
+                num_executors=5,
+                executor_memory="4g",
+                driver_memory="4g",
+                dag= dag,
+                sql="""    
+                --DROP TABLE IF EXISTS customer360.daily_deposit_predictions_metabase;
+                CREATE TABLE  customer360.daily_deposit_predictions_metabase
+                (
+                    report_date STRING,
+                    actual_value DOUBLE,
+                    predicted_mean DOUBLE,
+                    predicted_median DOUBLE,
+                    last_updated_at STRING
+                )
+                stored as orc
+                        """)
+        
+
+
+        vint1_daily_deposit_create_table_task_history = SparkSqlOperator (
+                task_id= 'vint1_daily_deposit_create_table_task_history',
+                conn_id= 'spark_datalake',
+                name= 'vint1_daily_deposit_create_table_task_history',
+                run_as_user='airflow',
+                executor_cores=2,
+                num_executors=5,
+                executor_memory="4g",
+                driver_memory="4g",
+                dag= dag,
+                sql="""    
+                --DROP TABLE IF EXISTS customer360.daily_deposit_predictions_history;
+                CREATE TABLE  customer360.daily_deposit_predictions_history
+                (
+                    target_date STRING,
+                    actual_value DOUBLE,
+                    predicted_mean DOUBLE,
+                    predicted_median DOUBLE
+                )
+                PARTITIONED BY (target_date)
+                stored as orc
+                        """)
+        
+        
+
+==================================================================
+
+import os
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.providers.ssh.operators.ssh import SSHOperator
+from airflow.providers.apache.spark.operators.spark_sql import SparkSqlOperator
+from airflow.operators.python import PythonOperator
+import pendulum
+import subprocess
+
+local_tz = pendulum.local_timezone()
+
+
+SSH_CONN_ID = "ssh_106"
+DOCKER_CONTAINER_NAME = "daily_deposit-kedro-app-deposit-1"
+KEDRO_PROJECT_PATH = "/app"
+NFS_STAGING_AREA = "/u01/data/nfs/103/hdfs_put/ds" 
+REMOTE_USER_AND_HOST = "dpc@10.43.128.139"  
+LOCAL_PROJECT_PATH='/u01/user-data/vint1/daily_deposit'
+LOCAL_PATH_103='/u01/data/nfs/hdfs_put/ds'
+
+# HDFS paths
+HDFS_PREDICTIONS_PATH = "/datalake/staging/daily_deposit_predictions"
+HDFS_ACTUALS_PATH = "/datalake/staging/daily_deposit_actuals"
+HDFS_HISTORY_PATH = "/datalake/staging/daily_deposit_prediction_history"
+
+# Datalake tables
+STAGING_TABLE = "customer360.daily_deposit_predictions_staging"
+METABASE_TABLE = "customer360.daily_deposit_predictions_metabase"
+HISTORY_TABLE = "customer360.daily_deposit_predictions_history"
+ACTUALS_SOURCE_TABLE = "vcrm.vcrm_frpt_depst_report_sum_prog"
+
+
+default_args = {
+    'owner': 'datalake',
+    'start_date': datetime(2025, 7, 30, tzinfo=local_tz),
+    'retries': 3,
+    'retry_delay': timedelta(minutes=5),
+    'email': ['vint1@vietinbank.vn'],
+    'email_on_failure': True,
+}
+
+
+def put_files_to_hdfs():
+
+    files_to_transfer = {
+        f"{LOCAL_PATH_103}/daily_predictions.csv": f"{HDFS_PREDICTIONS_PATH}/daily_predictions.csv",
+        f"{LOCAL_PATH_103}/daily_actuals.csv": f"{HDFS_ACTUALS_PATH}/daily_actuals.csv", 
+        f"{LOCAL_PATH_103}/prediction_history.csv": f"{HDFS_HISTORY_PATH}/prediction_history.csv", 
+    }
+    
+    for local_path, hdfs_path in files_to_transfer.items():
+        print(f"Putting {local_path} to {hdfs_path}")
+ 
+        hdfs_dir = os.path.dirname(hdfs_path)
+        subprocess.run(["hdfs", "dfs", "-mkdir", "-p", hdfs_dir], check=True)
+ 
+        command = ["hdfs", "dfs", "-put", "-f", local_path, hdfs_path]
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"HDFS put failed for {local_path}: {result.stderr}")
+        print(f"HDFS put successful: {result.stdout}")
+
+with DAG(
+    'deposit_pred_daily_predict_m1',
+    default_args=default_args,
+    schedule_interval="45 8 * * *",  # 8:30 AM every day
+    catchup=False,
+    tags=['deposit_prediction', 'kedro', 'prediction'],
+) as dag:
+
+    # Run Kedro pipeline to generate the prediction and actuals CSV files
+    run_kedro_prediction = SSHOperator(
+        task_id='run_kedro_daily_prediction',
+        ssh_conn_id=SSH_CONN_ID,
+        command=f'docker exec {DOCKER_CONTAINER_NAME} bash -c "cd {KEDRO_PROJECT_PATH} && kedro run --pipeline=daily_predict_m1"',
+        cmd_timeout=1800  
+    )
+
+    # run_kedro_history_backfill = SSHOperator(
+    #     task_id='run_kedro_history_backfill',
+    #     ssh_conn_id=SSH_CONN_ID,
+    #     command=f'docker exec {DOCKER_CONTAINER_NAME} bash -c "cd {KEDRO_PROJECT_PATH} && kedro run --pipeline=backfill_history"',
+    #     cmd_timeout=1800  
+    # )
+
+    # Transfer both CSV files from the Kedro machine to the NFS staging area
+    transfer_files_to_nfs = SSHOperator(
+        task_id='transfer_files_to_nfs',
+        ssh_conn_id=SSH_CONN_ID,
+        command=(
+            f"sshpass -e scp {LOCAL_PROJECT_PATH}/data/10_datalake_output/daily_predictions.csv {REMOTE_USER_AND_HOST}:{NFS_STAGING_AREA}/ && "
+            f"sshpass -e scp {LOCAL_PROJECT_PATH}/data/10_datalake_output/daily_actuals.csv {REMOTE_USER_AND_HOST}:{NFS_STAGING_AREA}/ && "
+            f"sshpass -e scp {LOCAL_PROJECT_PATH}/data/10_datalake_output/prediction_history.csv {REMOTE_USER_AND_HOST}:{NFS_STAGING_AREA}/ "
+        ),
+        cmd_timeout=300
+    )
+
+    # Put the files from the NFS area into HDFS
+    put_to_hdfs = PythonOperator(
+        task_id="put_files_to_hdfs",
+        python_callable=put_files_to_hdfs,
+    )
+
+    # Create a temporary view from the HDFS CSV file
+    process_prediction_in_spark = SparkSqlOperator(
+        task_id='process_prediction_in_spark',
+        conn_id='spark_datalake',
+        sql=f"""
+        CREATE OR REPLACE TEMPORARY VIEW prediction_view
+        USING CSV
+        OPTIONS (
+            path = '{HDFS_PREDICTIONS_PATH}/daily_predictions.csv',
+            header = 'true',
+            inferSchema = 'true'
+        );
+        TRUNCATE TABLE {STAGING_TABLE};
+        INSERT INTO {STAGING_TABLE}
+        SELECT
+            CAST(cob_dt AS STRING),
+            CAST(target_date AS STRING),
+            CAST(scenario AS STRING),
+            CAST(metric_type AS STRING),
+            CAST(metric_value AS DOUBLE)
+        FROM prediction_view;
+        """
+    )
+
+    
+    # rebuild the final Metabase table from scratch
+    rebuild_metabase_table = SparkSqlOperator(
+        task_id='rebuild_metabase_table',
+        conn_id='spark_datalake',
+        sql=f"""
+        TRUNCATE TABLE {METABASE_TABLE};
+
+        INSERT INTO {METABASE_TABLE}
+        WITH
+        HistoricalActuals AS (
+            select 
+                report_date,
+                total_bal - LAG(total_bal,1,total_bal) over (order by report_date) as actual_value
+            from
+                (
+                select 
+                    cast(cob_dt as STRING) as report_date,
+                    sum(total_bal) as total_bal
+                from
+                    (
+                    select
+                        brn,
+                        cob_dt,
+                        (kbl_casa_amt + kbl_cd_amt + khdn_casa_amt + khdn_cd_amt + oth_casa_amt + oth_cd_amt) as total_bal
+                    from
+                        (
+                        select
+                            distinct brn,
+                            cast(kbl_casa_amt as double) as kbl_casa_amt,
+                            cast(kbl_cd_amt as double) as kbl_cd_amt,
+                            cast(khdn_casa_amt as double) as khdn_casa_amt,
+                            cast(khdn_cd_amt as double) as khdn_cd_amt,
+                            cast(oth_casa_amt as double) as oth_casa_amt,
+                            cast(oth_cd_amt as double) as oth_cd_amt,
+                            cob_dt
+                        from
+                            {ACTUALS_SOURCE_TABLE}
+                        where
+                            cob_dt >= '2023-01-01'
+            )
+            )
+                group by
+                    cob_dt
+            )
+            order by
+                report_date asc
+        ),
+        LatestPredictions AS (
+            SELECT
+                CAST(target_date as STRING) AS report_date,
+                MAX(CASE WHEN metric_type = 'final_pred_mean' THEN metric_value ELSE NULL END) AS predicted_mean,
+                MAX(CASE WHEN metric_type = 'final_pred_q0.5' THEN metric_value ELSE NULL END) AS predicted_median
+            FROM {STAGING_TABLE}
+            WHERE (scenario = 'mean_based' AND metric_type = 'final_pred_mean')
+            OR (scenario = 'median_based' AND metric_type = 'final_pred_q0.5')
+            GROUP BY target_date
+        )
+        SELECT
+            CAST(COALESCE(h.report_date, p.report_date) AS STRING) AS report_date,
+            h.actual_value,
+            p.predicted_mean,
+            p.predicted_median,
+            CAST(CURRENT_TIMESTAMP() AS STRING) AS last_updated_at
+        FROM HistoricalActuals h
+        FULL OUTER JOIN LatestPredictions p ON h.report_date = p.report_date
+        WHERE COALESCE(h.report_date, p.report_date) >= '2025-01-01';
+        """,
+        executor_cores=3,
+        num_executors=4,
+        executor_memory="5G"
+    )
+
+
+    insert_history_into_datalake = SparkSqlOperator(
+        task_id='insert_history_into_datalake',
+        conn_id='spark_datalake',
+        sql=f"""
+        SET hive.exec.dynamic.partition.mode=nonstrict;
+        CREATE OR REPLACE TEMPORARY VIEW history_view
+        USING CSV
+        OPTIONS (
+            path = '{HDFS_HISTORY_PATH}/prediction_history.csv',
+            header = 'true',
+            inferSchema = 'true'
+        );
+        INSERT OVERWRITE TABLE {HISTORY_TABLE} 
+        PARTITION(target_date)
+        SELECT
+            CAST(actual_value AS DOUBLE),
+            CAST(predicted_mean AS DOUBLE),
+            CAST(predicted_median AS DOUBLE),
+            CAST(target_date AS STRING)
+        FROM history_view;
+        """
+    )
+
+
+    run_kedro_prediction >> transfer_files_to_nfs >> put_to_hdfs
+    put_to_hdfs >> process_prediction_in_spark >> rebuild_metabase_table >> insert_history_into_datalake
