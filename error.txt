@@ -1,0 +1,263 @@
+Please tell me why when I run docker compose up --build for the deposit project it kept getting error: 
+285.1 ERROR: Could not install packages due to an OSError: HTTPSConnectionPool(host='dso-nexus.***.vn', port=443): Max retries exceeded with url: /repository/itd_pypi/packages/matplotlib/3.10.6/matplotlib-3.10.6-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (Caused by ReadTimeoutError("HTTPSConnectionPool(host='dso-nexus.vietinbank.vn', port=443): Read timed out. (read timeout=15)"))
+285.1
+------
+failed to solve: process "/bin/sh -c pip install ." did not complete successfully: exit code: 1
+:
+
+pyproject.toml: 
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daily_deposit"
+readme = "README.md"
+dynamic = ["version"]
+dependencies = [
+    "kedro[jupyter]~=0.19.14",
+    "kedro-datasets[pandas-csvdataset, pandas-exceldataset, pandas-parquetdataset, plotly-plotlydataset, plotly-jsondataset, matplotlib-matplotlibwriter, pickle-pickledataset, partitions-partitioneddataset]>=3.0",
+    "kedro-viz>=6.7.0",
+    "scikit-learn",
+    "seaborn",
+    "pandas",
+    "numpy",
+    "holidays",
+    "scipy",
+    "lightgbm",
+    "optuna",
+    "matplotlib",
+    "python-docx",
+    "optuna-integration[lightgbm]",
+    "sqlalchemy",
+    "trino",
+]
+requires-python = ">=3.9"
+
+[project.scripts]
+daily-deposit = "daily_deposit.__main__:main"
+
+[project.entry-points."kedro.hooks"]
+
+[project.optional-dependencies]
+dev = ["pytest-cov~=3.0", "pytest-mock>=1.7.1, <2.0", "pytest~=7.2", "ruff~=0.1.8"]
+
+[tool.kedro]
+package_name = "daily_deposit"
+project_name = "daily_deposit"
+kedro_init_version = "0.19.14"
+tools = "['Linting', 'Testing', 'Data Structure']"
+source_dir = "src"
+
+[tool.setuptools.dynamic.version]
+attr = "daily_deposit.__version__"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
+
+# --- Linting and Formatting ---
+[tool.ruff]
+line-length = 88
+show-fixes = true
+select = ["F", "W", "E", "I", "UP", "PL", "T201"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# --- Testing ---
+[tool.pytest.ini_options]
+addopts = "--cov-report term-missing --cov src/daily_deposit -ra"
+
+[tool.coverage.report]
+fail_under = 0
+show_missing = true
+exclude_lines = ["pragma: no cover", "raise NotImplementedError"]
+
+Dockerfile:
+FROM python:3.10-slim
+
+COPY debian.sources /etc/apt/sources.list.d
+
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on 
+
+WORKDIR /app
+
+
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+
+RUN pip config set global.index-url https://dso-nexus.vietinbank.vn/repository/itd_pypi/simple
+RUN pip config set global.trusted-host dso-nexus.vietinbank.vn
+
+COPY pyproject.toml ./
+COPY src/ src/
+
+
+RUN pip install .
+
+
+COPY conf/ conf/
+COPY data/ data/
+COPY scripts/ scripts/
+
+
+ENV KEDRO_PROJECT_PATH=/app
+
+docker-compose.yml:
+services:
+  kedro-app-deposit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./conf:/app/conf  
+      - ./data:/app/data  
+      - ./logs:/app/logs  
+      - ./src:/app/src    
+      - ./scripts:/app/scripts  
+
+    command: tail -f /dev/null
+
+However when I run this for the loan project it works perfectly fine, why is that:
+
+pyproject.toml:
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daily_loan"
+readme = "README.md"
+dynamic = ["version"]
+dependencies = [
+    "kedro[jupyter]~=0.19.14",
+    "kedro-datasets[pandas-csvdataset, pandas-exceldataset, pandas-parquetdataset, plotly-plotlydataset, plotly-jsondataset, matplotlib-matplotlibwriter, pickle-pickledataset, partitions-partitioneddataset]>=3.0",
+    "kedro-viz>=6.7.0",
+    "scikit-learn",
+    "seaborn",
+    "pandas",
+    "numpy",
+    "holidays",
+    "scipy",
+    "lightgbm",
+    "optuna",
+    "matplotlib",
+    "python-docx",
+    "optuna-integration[lightgbm]",
+    "sqlalchemy",
+    "trino",
+]
+requires-python = ">=3.9"
+
+[project.scripts]
+daily-loan = "daily_loan.__main__:main"
+
+[project.entry-points."kedro.hooks"]
+
+[project.optional-dependencies]
+dev = ["pytest-cov~=3.0", "pytest-mock>=1.7.1, <2.0", "pytest~=7.2", "ruff~=0.1.8"]
+
+[tool.kedro]
+package_name = "daily_loan"
+project_name = "daily_loan"
+kedro_init_version = "0.19.14"
+tools = "['Linting', 'Testing', 'Data Structure']"
+source_dir = "src"
+
+[tool.setuptools.dynamic.version]
+attr = "daily_loan.__version__"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
+
+# --- Linting and Formatting ---
+[tool.ruff]
+line-length = 88
+show-fixes = true
+select = ["F", "W", "E", "I", "UP", "PL", "T201"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# --- Testing ---
+[tool.pytest.ini_options]
+addopts = "--cov-report term-missing --cov src/daily_loan -ra"
+
+[tool.coverage.report]
+fail_under = 0
+show_missing = true
+exclude_lines = ["pragma: no cover", "raise NotImplementedError"]
+
+
+Dockerfile:
+
+FROM dso-nexus.vietinbank.vn/ai_docker/daily-loan-kedro-app:v1
+
+COPY debian.sources /etc/apt/sources.list.d
+
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on 
+
+WORKDIR /app
+
+
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+
+RUN pip config set global.index-url https://dso-nexus.vietinbank.vn/repository/itd_pypi/simple
+RUN pip config set global.trusted-host dso-nexus.vietinbank.vn
+
+COPY pyproject.toml ./
+COPY src/ src/
+
+
+#RUN pip install .
+
+
+COPY conf/ conf/
+COPY data/ data/
+COPY scripts/ scripts/
+
+
+ENV KEDRO_PROJECT_PATH=/app
+
+docker-compose.yml:
+
+FROM dso-nexus.vietinbank.vn/ai_docker/daily-loan-kedro-app:v1
+
+COPY debian.sources /etc/apt/sources.list.d
+
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on 
+
+WORKDIR /app
+
+
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+
+RUN pip config set global.index-url https://dso-nexus.vietinbank.vn/repository/itd_pypi/simple
+RUN pip config set global.trusted-host dso-nexus.vietinbank.vn
+
+COPY pyproject.toml ./
+COPY src/ src/
+
+
+#RUN pip install .
+
+
+COPY conf/ conf/
+COPY data/ data/
+COPY scripts/ scripts/
+
+
+ENV KEDRO_PROJECT_PATH=/app
