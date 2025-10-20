@@ -1,13 +1,4 @@
-SELECT
-    conversion_date,
-    from_currency,
-    CAST(conversion_rate AS DOUBLE) AS conversion_rate
-FROM
-    ogl.ogl_gl_daily_rates
-WHERE
-    conversion_date >= '2024-12-09'
-    AND conversion_type = '1009'
-    AND to_currency = 'VND'WITH RankedRates AS (
+WITH RankedRates AS (
     SELECT
         conversion_date,
         from_currency,
@@ -28,16 +19,3 @@ FROM
     RankedRates
 WHERE
     row_num = 1
-QUALIFY
-    -- The QUALIFY clause filters the results of a window function without needing a CTE.
-    ROW_NUMBER() OVER (
-        PARTITION BY conversion_date
-        ORDER BY
-            -- Priority 1: Records where the special condition is met get rank 1.
-            -- (CASE returns 0 for precedence, which sorts ASC first).
-            CASE WHEN conversion_date > cob_dt THEN 0 ELSE 1 END ASC,
-
-            -- Priority 2 (Tie-breaker): If multiple records have the same priority (e.g., two records satisfy the special rule),
-            -- we deterministically break the tie by choosing the highest conversion rate.
-            conversion_rate DESC
-    ) = 1;
