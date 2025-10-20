@@ -7,7 +7,27 @@ FROM
 WHERE
     conversion_date >= '2024-12-09'
     AND conversion_type = '1009'
-    AND to_currency = 'VND'
+    AND to_currency = 'VND'WITH RankedRates AS (
+    SELECT
+        conversion_date,
+        from_currency,
+        CAST(conversion_rate AS double) AS conversion_rate,
+        ROW_NUMBER() OVER(PARTITION BY conversion_date, from_currency ORDER BY conversion_rate DESC) as row_num
+    FROM
+        ogl.ogl_gl_daily_rates
+    WHERE
+        conversion_date >= '2024-12-09'
+        AND conversion_type = '1009'
+        AND to_currency = 'VND'
+)
+SELECT
+    conversion_date,
+    from_currency,
+    conversion_rate
+FROM
+    RankedRates
+WHERE
+    row_num = 1
 QUALIFY
     -- The QUALIFY clause filters the results of a window function without needing a CTE.
     ROW_NUMBER() OVER (
