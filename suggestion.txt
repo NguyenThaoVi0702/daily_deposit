@@ -1,0 +1,34 @@
+df = pd.read_sql(query, engine)
+
+# Convert 'cob_dt' to datetime objects for proper plotting
+df['cob_dt'] = pd.to_datetime(df['cob_dt'])
+
+# Pivot the DataFrame to prepare for plotting
+# We will use 'vnd_open_bal' for all types as requested
+pivot_df = df.pivot(index='cob_dt', columns='TYPE', values='vnd_open_bal')
+
+# Create the time-series line graph
+plt.style.use('seaborn-v0_8-grid') # Using a nice style for the plot
+fig, ax = plt.subplots(figsize=(15, 8))
+
+# Plot each type
+for column in pivot_df.columns:
+    ax.plot(pivot_df.index, pivot_df[column], marker='o', linestyle='-', label=column)
+
+# Formatting the plot
+ax.set_title('Open Balance Time Series (in VND)', fontsize=16)
+ax.set_xlabel('Date', fontsize=12)
+ax.set_ylabel('VND Open Balance', fontsize=12)
+ax.legend(title='Type')
+ax.grid(True)
+
+# Improve date formatting on the x-axis
+plt.xticks(rotation=45)
+plt.tight_layout()
+
+# Display the plot
+plt.show()
+
+# Display the first few rows of the pivoted data
+print("Pivoted Data for Plotting:")
+print(pivot_df.head())
