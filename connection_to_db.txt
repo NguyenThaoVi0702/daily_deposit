@@ -1,0 +1,19 @@
+from sqlalchemy import create_engine
+from trino.auth import BasicAuthentication
+import pandas as pd
+import getpass
+from datetime import datetime
+import warnings
+warnings.filterwarnings('ignore')
+# connect đến db
+username  = 'ai_user'
+password=getpass.getpass('Password:')
+engine = create_engine(
+    "****",
+    connect_args={
+        "auth": BasicAuthentication(username, password),
+        "http_scheme": "https",
+        "verify": False
+    }
+) 
+
