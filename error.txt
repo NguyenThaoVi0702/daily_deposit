@@ -1,9 +1,17 @@
-WITH RankedRates AS (
+-- This subquery now safely handles duplicate rates for the same day
+SELECT
+    conversion_date,
+    from_currency,
+    conversion_rate
+FROM (
     SELECT
         conversion_date,
         from_currency,
         CAST(conversion_rate AS double) AS conversion_rate,
-        ROW_NUMBER() OVER(PARTITION BY conversion_date, from_currency ORDER BY conversion_rate DESC) as row_num
+        ROW_NUMBER() OVER(
+            PARTITION BY conversion_date, from_currency 
+            ORDER BY your_timestamp_or_id_column DESC -- <-- IMPORTANT: Replace this column!
+        ) as rn
     FROM
         ogl.ogl_gl_daily_rates
     WHERE
@@ -11,11 +19,5 @@ WITH RankedRates AS (
         AND conversion_type = '1009'
         AND to_currency = 'VND'
 )
-SELECT
-    conversion_date,
-    from_currency,
-    conversion_rate
-FROM
-    RankedRates
-WHERE
-    row_num = 1
+WHERE 
+    rn = 1
