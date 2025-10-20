@@ -1,263 +1,67 @@
-Please tell me why when I run docker compose up --build for the deposit project it kept getting error: 
-285.1 ERROR: Could not install packages due to an OSError: HTTPSConnectionPool(host='dso-nexus.***.vn', port=443): Max retries exceeded with url: /repository/itd_pypi/packages/matplotlib/3.10.6/matplotlib-3.10.6-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (Caused by ReadTimeoutError("HTTPSConnectionPool(host='dso-nexus.vietinbank.vn', port=443): Read timed out. (read timeout=15)"))
-285.1
-------
-failed to solve: process "/bin/sh -c pip install ." did not complete successfully: exit code: 1
-:
-
-pyproject.toml: 
-
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "daily_deposit"
-readme = "README.md"
-dynamic = ["version"]
-dependencies = [
-    "kedro[jupyter]~=0.19.14",
-    "kedro-datasets[pandas-csvdataset, pandas-exceldataset, pandas-parquetdataset, plotly-plotlydataset, plotly-jsondataset, matplotlib-matplotlibwriter, pickle-pickledataset, partitions-partitioneddataset]>=3.0",
-    "kedro-viz>=6.7.0",
-    "scikit-learn",
-    "seaborn",
-    "pandas",
-    "numpy",
-    "holidays",
-    "scipy",
-    "lightgbm",
-    "optuna",
-    "matplotlib",
-    "python-docx",
-    "optuna-integration[lightgbm]",
-    "sqlalchemy",
-    "trino",
-]
-requires-python = ">=3.9"
-
-[project.scripts]
-daily-deposit = "daily_deposit.__main__:main"
-
-[project.entry-points."kedro.hooks"]
-
-[project.optional-dependencies]
-dev = ["pytest-cov~=3.0", "pytest-mock>=1.7.1, <2.0", "pytest~=7.2", "ruff~=0.1.8"]
-
-[tool.kedro]
-package_name = "daily_deposit"
-project_name = "daily_deposit"
-kedro_init_version = "0.19.14"
-tools = "['Linting', 'Testing', 'Data Structure']"
-source_dir = "src"
-
-[tool.setuptools.dynamic.version]
-attr = "daily_deposit.__version__"
-
-[tool.setuptools.packages.find]
-where = ["src"]
-namespaces = false
-
-# --- Linting and Formatting ---
-[tool.ruff]
-line-length = 88
-show-fixes = true
-select = ["F", "W", "E", "I", "UP", "PL", "T201"]
-ignore = ["E501"]
-
-[tool.ruff.format]
-docstring-code-format = true
-
-# --- Testing ---
-[tool.pytest.ini_options]
-addopts = "--cov-report term-missing --cov src/daily_deposit -ra"
-
-[tool.coverage.report]
-fail_under = 0
-show_missing = true
-exclude_lines = ["pragma: no cover", "raise NotImplementedError"]
-
-Dockerfile:
-FROM python:3.10-slim
-
-COPY debian.sources /etc/apt/sources.list.d
-
-
-ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on 
-
-WORKDIR /app
-
-
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
-
-RUN pip config set global.index-url https://dso-nexus.vietinbank.vn/repository/itd_pypi/simple
-RUN pip config set global.trusted-host dso-nexus.vietinbank.vn
-
-COPY pyproject.toml ./
-COPY src/ src/
-
-
-RUN pip install .
-
-
-COPY conf/ conf/
-COPY data/ data/
-COPY scripts/ scripts/
-
-
-ENV KEDRO_PROJECT_PATH=/app
-
-docker-compose.yml:
-services:
-  kedro-app-deposit:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - ./conf:/app/conf  
-      - ./data:/app/data  
-      - ./logs:/app/logs  
-      - ./src:/app/src    
-      - ./scripts:/app/scripts  
-
-    command: tail -f /dev/null
-
-However when I run this for the loan project it works perfectly fine, why is that:
-
-pyproject.toml:
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "daily_loan"
-readme = "README.md"
-dynamic = ["version"]
-dependencies = [
-    "kedro[jupyter]~=0.19.14",
-    "kedro-datasets[pandas-csvdataset, pandas-exceldataset, pandas-parquetdataset, plotly-plotlydataset, plotly-jsondataset, matplotlib-matplotlibwriter, pickle-pickledataset, partitions-partitioneddataset]>=3.0",
-    "kedro-viz>=6.7.0",
-    "scikit-learn",
-    "seaborn",
-    "pandas",
-    "numpy",
-    "holidays",
-    "scipy",
-    "lightgbm",
-    "optuna",
-    "matplotlib",
-    "python-docx",
-    "optuna-integration[lightgbm]",
-    "sqlalchemy",
-    "trino",
-]
-requires-python = ">=3.9"
-
-[project.scripts]
-daily-loan = "daily_loan.__main__:main"
-
-[project.entry-points."kedro.hooks"]
-
-[project.optional-dependencies]
-dev = ["pytest-cov~=3.0", "pytest-mock>=1.7.1, <2.0", "pytest~=7.2", "ruff~=0.1.8"]
-
-[tool.kedro]
-package_name = "daily_loan"
-project_name = "daily_loan"
-kedro_init_version = "0.19.14"
-tools = "['Linting', 'Testing', 'Data Structure']"
-source_dir = "src"
-
-[tool.setuptools.dynamic.version]
-attr = "daily_loan.__version__"
-
-[tool.setuptools.packages.find]
-where = ["src"]
-namespaces = false
-
-# --- Linting and Formatting ---
-[tool.ruff]
-line-length = 88
-show-fixes = true
-select = ["F", "W", "E", "I", "UP", "PL", "T201"]
-ignore = ["E501"]
-
-[tool.ruff.format]
-docstring-code-format = true
-
-# --- Testing ---
-[tool.pytest.ini_options]
-addopts = "--cov-report term-missing --cov src/daily_loan -ra"
-
-[tool.coverage.report]
-fail_under = 0
-show_missing = true
-exclude_lines = ["pragma: no cover", "raise NotImplementedError"]
-
-
-Dockerfile:
-
-FROM dso-nexus.vietinbank.vn/ai_docker/daily-loan-kedro-app:v1
-
-COPY debian.sources /etc/apt/sources.list.d
-
-
-ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on 
-
-WORKDIR /app
-
-
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
-
-RUN pip config set global.index-url https://dso-nexus.vietinbank.vn/repository/itd_pypi/simple
-RUN pip config set global.trusted-host dso-nexus.vietinbank.vn
-
-COPY pyproject.toml ./
-COPY src/ src/
-
-
-#RUN pip install .
-
-
-COPY conf/ conf/
-COPY data/ data/
-COPY scripts/ scripts/
-
-
-ENV KEDRO_PROJECT_PATH=/app
-
-docker-compose.yml:
-
-FROM dso-nexus.vietinbank.vn/ai_docker/daily-loan-kedro-app:v1
-
-COPY debian.sources /etc/apt/sources.list.d
-
-
-ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on 
-
-WORKDIR /app
-
-
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
-
-RUN pip config set global.index-url https://dso-nexus.vietinbank.vn/repository/itd_pypi/simple
-RUN pip config set global.trusted-host dso-nexus.vietinbank.vn
-
-COPY pyproject.toml ./
-COPY src/ src/
-
-
-#RUN pip install .
-
-
-COPY conf/ conf/
-COPY data/ data/
-COPY scripts/ scripts/
-
-
-ENV KEDRO_PROJECT_PATH=/app
+---------------------------------------------------------------------------
+ValueError                                Traceback (most recent call last)
+Cell In[3], line 8
+      4 df['cob_dt'] = pd.to_datetime(df['cob_dt'])
+      6 # Pivot the DataFrame to prepare for plotting
+      7 # We will use 'vnd_open_bal' for all types as requested
+----> 8 pivot_df = df.pivot(index='cob_dt', columns='TYPE', values='vnd_open_bal')
+     10 # Create the time-series line graph
+     11 plt.style.use('seaborn-v0_8-grid') # Using a nice style for the plot
+
+File /opt/venv/lib/python3.12/site-packages/pandas/core/frame.py:9346, in DataFrame.pivot(self, columns, index, values)
+   9339 @Substitution("")
+   9340 @Appender(_shared_docs["pivot"])
+   9341 def pivot(
+   9342     self, *, columns, index=lib.no_default, values=lib.no_default
+   9343 ) -> DataFrame:
+   9344     from pandas.core.reshape.pivot import pivot
+-> 9346     return pivot(self, index=index, columns=columns, values=values)
+
+File /opt/venv/lib/python3.12/site-packages/pandas/core/reshape/pivot.py:570, in pivot(data, columns, index, values)
+    566         indexed = data._constructor_sliced(data[values]._values, index=multiindex)
+    567 # error: Argument 1 to "unstack" of "DataFrame" has incompatible type "Union
+    568 # [List[Any], ExtensionArray, ndarray[Any, Any], Index, Series]"; expected
+    569 # "Hashable"
+--> 570 result = indexed.unstack(columns_listlike)  # type: ignore[arg-type]
+    571 result.index.names = [
+    572     name if name is not lib.no_default else None for name in result.index.names
+    573 ]
+    575 return result
+
+File /opt/venv/lib/python3.12/site-packages/pandas/core/series.py:4626, in Series.unstack(self, level, fill_value, sort)
+   4581 """
+   4582 Unstack, also known as pivot, Series with MultiIndex to produce DataFrame.
+   4583 
+   (...)   4622 b    2    4
+   4623 """
+   4624 from pandas.core.reshape.reshape import unstack
+-> 4626 return unstack(self, level, fill_value, sort)
+
+File /opt/venv/lib/python3.12/site-packages/pandas/core/reshape/reshape.py:517, in unstack(obj, level, fill_value, sort)
+    515 if is_1d_only_ea_dtype(obj.dtype):
+    516     return _unstack_extension_series(obj, level, fill_value, sort=sort)
+--> 517 unstacker = _Unstacker(
+    518     obj.index, level=level, constructor=obj._constructor_expanddim, sort=sort
+    519 )
+    520 return unstacker.get_result(
+    521     obj._values, value_columns=None, fill_value=fill_value
+    522 )
+
+File /opt/venv/lib/python3.12/site-packages/pandas/core/reshape/reshape.py:154, in _Unstacker.__init__(self, index, level, constructor, sort)
+    146 if num_cells > np.iinfo(np.int32).max:
+    147     warnings.warn(
+    148         f"The following operation may generate {num_cells} cells "
+    149         f"in the resulting pandas object.",
+    150         PerformanceWarning,
+    151         stacklevel=find_stack_level(),
+    152     )
+--> 154 self._make_selectors()
+
+File /opt/venv/lib/python3.12/site-packages/pandas/core/reshape/reshape.py:210, in _Unstacker._make_selectors(self)
+    207 mask.put(selector, True)
+    209 if mask.sum() < len(self.index):
+--> 210     raise ValueError("Index contains duplicate entries, cannot reshape")
+    212 self.group_index = comp_index
+    213 self.mask = mask
+
+ValueError: Index contains duplicate entries, cannot reshape
