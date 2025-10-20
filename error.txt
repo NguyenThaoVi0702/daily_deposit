@@ -1,10 +1,37 @@
+WITH RankedRates AS (
+    -- Step 1: Filter the initial dataset (all conversion rates, including cob_dt for logic)
+    SELECT
+        conversion_date,
+        from_currency,
+        CAST(conversion_rate AS DOUBLE) AS conversion_rate,
+        cob_dt, -- Required for the logic/ranking rule
+        -- Step 2: Assign a rank (ROW_NUMBER) to each record partitioned by conversion_date.
+        -- The ORDER BY clause determines which record gets rank 1.
+        ROW_NUMBER() OVER (
+            PARTITION BY conversion_date
+            ORDER BY
+                -- Priority 1 (Crucial): Place records satisfying the special rule first (value 0).
+                -- If conversion_date > cob_dt, this record gets precedence for rank 1.
+                CASE WHEN conversion_date > cob_dt THEN 0 ELSE 1 END ASC,
+
+                -- Priority 2 (Tie-breaker): If two records meet the same criteria (e.g., both satisfy
+                -- the special rule, or both don't), we break the tie deterministically.
+                -- Using conversion_rate DESC ensures consistent selection if multiple rates exist.
+                conversion_rate DESC
+        ) AS rn
+    FROM
+        ogl.ogl_gl_daily_rates
+    WHERE
+        conversion_date >= '2024-12-09'
+        AND conversion_type = '1009'
+        AND to_currency = 'VND'
+)
+-- Step 3: Select only the record that received rank 1 (rn = 1) for each partition.
 SELECT
-	DISTINCT conversion_date,
-	from_currency,
-	CAST(conversion_rate AS double) AS conversion_rate
+    conversion_date,
+    from_currency,
+    conversion_rate
 FROM
-	ogl.ogl_gl_daily_rates
+    RankedRates
 WHERE
-	conversion_date >= '2024-12-09'
-	AND conversion_type = '1009'
-	AND to_currency = 'VND'
+    rn = 1;
