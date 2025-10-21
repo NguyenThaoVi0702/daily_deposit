@@ -19,9 +19,10 @@ FROM (
     WHERE
         conversion_date >= '2024-12-09'
         AND conversion_type = '1009'
-        AND to_currency = 'VND'
-        AND from_currency = 'USD'
+        AND from_currency = 'VND'
+        AND to_currency = 'USD'
 )
 )
 WHERE 
     rn = 1
+    
